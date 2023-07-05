@@ -1,0 +1,131 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  InitFunctionName:
+    Type: String
+
+Globals:
+  Function:
+    Architectures:
+      - arm64
+    MemorySize: 1798
+    Runtime: python3.9
+    Timeout: 60
+
+Resources:
+
+  StagingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'staging-bucket-${AWS::AccountId}'
+
+  HelloPoetry:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Says just hello
+      CodeUri: artifact.zip
+      Handler: hello_poetry.handler.handle_request
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref StagingBucket
+      PackageType: Zip
+      Role: !GetAtt HelloPoetryRole.Arn
+      Tracing: Active
+
+  HelloLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${HelloPoetry}"
+      RetentionInDays: 7
+
+  AccessS3BucketPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub 'AccessS3Bucket-${AWS::StackName}'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - !GetAtt StagingBucket.Arn
+              - !Sub '${StagingBucket.Arn}/*'
+
+  HelloPoetryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      ManagedPolicyArns:
+        - !Ref DefaultLambdaPolicy
+        - !Ref AccessS3BucketPolicy
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+
+
+  InitFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref DefaultLambdaPolicy
+      Policies:
+        - PolicyName: ReportJobResultCodePipeline
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              Effect: Allow
+              Action:
+                - codepipeline:PutJobSuccessResult
+                - codepipeline:PutJobFailureResult
+              Resource: "*"
+
+
+  InitLambdaPoetry:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Says just hello
+      CodeUri: artifact.zip
+      FunctionName: !Ref InitFunctionName
+      Handler: hello_poetry.init_handler.handle_request
+      PackageType: Zip
+      Role: !GetAtt InitFunctionRole.Arn
+      Tracing: Active
+
+  InitLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${InitLambdaPoetry}"
+      RetentionInDays: 7
+
+
+  DefaultLambdaPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub 'DefaultLambdaPolicy-${AWS::StackName}'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: "*"

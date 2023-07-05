@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "knn"
+version = "0.1.0"
+description = ""
+authors = ["Orestis Gkorgkas <orestis.gorgas@gmail.com>"]
+packages = [{include = "knn"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pandas= '2.0.2'
+
+[tool.poetry.group.dev.dependencies]
+pytest = "7.2.0"
+assertpy = "1.1"
+
+[tool.pytest.ini_options]
+python_files = "*test.py"
+python_classes = "*Test"
+python_functions = "should_*"
+addopts = [
+    "--import-mode=importlib",
+]
+pythonpath = ["."]
